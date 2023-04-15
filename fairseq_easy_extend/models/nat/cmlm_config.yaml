@@ -6,7 +6,8 @@ task:
   target_lang: en
   noise: random_mask
 criterion:
-  _name: nat_loss
+  _name: rl_loss
+  sentence_level_metric: bleu
 model:
   _name: cmlm_transformer_base
   share_decoder_input_output_embed: true
@@ -28,7 +29,7 @@ dataset:
   max_tokens: 8192
   validate_interval_updates: 1000
 optimization:
-  lr: [0.0005]
+  lr: [0.00005]
   update_freq: [8]
   max_update: 20000
   stop_min_lr: 1e-09
