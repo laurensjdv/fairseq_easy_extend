@@ -1,22 +1,24 @@
-
 import math
 
 import torch
 import torch.nn.functional as F
-
+from fairseq import utils
+from fairseq.logging import metrics
 from fairseq.criterions import FairseqCriterion, register_criterion
 from fairseq.dataclass import FairseqDataclass
 from torch import Tensor
 
 from dataclasses import dataclass, field
 
-import sacrebleu
-from comet import comet
+from sacrebleu.metrics import BLEU, CHRF
+import comet
+
 
 @dataclass
 class RLCriterionConfig(FairseqDataclass):
-    sentence_level_metric: str = field(default="bleu",
-                                       metadata={"help": "sentence level metric"})
+    sentence_level_metric: str = field(
+        default="bleu", metadata={"help": "sentence level metric"}
+    )
 
 
 @register_criterion("rl_loss", dataclass=RLCriterionConfig)
@@ -24,6 +26,7 @@ class RLCriterion(FairseqCriterion):
     def __init__(self, task, sentence_level_metric):
         super().__init__(task)
         self.metric = sentence_level_metric
+        self.tgt_dict = task.tgt_dict
 
     def _compute_loss(
         self, outputs, targets, masks=None, label_smoothing=0.0, name="loss", factor=1.0
@@ -34,46 +37,49 @@ class RLCriterion(FairseqCriterion):
         masks:   batch x len
         """
 
-        #padding mask, do not remove
+        # padding mask, do not remove
         if masks is not None:
             outputs, targets = outputs[masks], targets[masks]
 
-        #we take a softmax over outputs
-        #argmax over the softmax \ sampling (e.g. multinomial)
-        #sampled_sentence = [4, 17, 18, 19, 20]
-        #sampled_sentence_string = tgt_dict.string([4, 17, 18, 19, 20])
-        #see dictionary class of fairseq
-        #target_sentence = "I am a sentence"
-        #with torch.no_grad()
-            #R(*) = eval_metric(sampled_sentence_string, target_sentence)
-            #R(*) is a number, BLEU, сhrf, etc.
+        # we take a softmax over outputs
+        # argmax over the softmax \ sampling (e.g. multinomial)
+        # sampled_sentence = [4, 17, 18, 19, 20]
+        # sampled_sentence_string = tgt_dict.string([4, 17, 18, 19, 20])
+        # see dictionary class of fairseq
+        # target_sentence = "I am a sentence"
+        # with torch.no_grad()
+        # R(*) = eval_metric(sampled_sentence_string, target_sentence)
+        # R(*) is a number, BLEU, сhrf, etc.
 
-        #loss = -log_prob(outputs)*R()
-        #loss = loss.mean()
+        # loss = -log_prob(outputs)*R()
+        # loss = loss.mean()
 
-        
         log_prob = F.log_softmax(outputs, dim=-1)
 
         # multinomial distribution
-        dist = torch.distributions.Multinomial(probs=log_prob.exp())
-        sampled_sentence = dist.sample()
-        sampled_sentence_string = tgt_dict.string(sampled_sentence)
+        dist = torch.multinomial(log_prob.exp(), 1)
+        # sampled_sentence = dist.sample()
+        sampled_sentence = dist
+        sampled_sentence_string = self.tgt_dict.string(sampled_sentence)
 
-        target_sentence = tgt_dict.string(targets)
+        target_sentence = self.tgt_dict.string(targets)
         with torch.no_grad():
             if self.metric == "bleu":
-                R = sacrebleu.corpus_bleu(sampled_sentence_string, [target_sentence])
+                bleu = BLEU()
+                R = bleu.corpus_score(sampled_sentence_string, target_sentence).score
             elif self.metric == "chrf":
-                R = sacrebleu.corpus_chrf(sampled_sentence_string, [target_sentence])
+                chrf = CHRF()
+                R = chrf.corpus_score(sampled_sentence_string, target_sentence).score
             # elif self.metric == "comet":
             #     R = comet(sampled_sentence_string, [target_sentence])
-        
-        loss = -log_prob*torch.tensor(R)
+
+        loss = -log_prob * R
         loss = loss.mean()
 
+        nll_loss = loss
+        loss = loss * factor
 
-        return loss
-
+        return {"name": name, "loss": loss, "nll_loss": nll_loss, "factor": factor}
 
     def _custom_loss(self, loss, name="loss", factor=1.0):
         return {"name": name, "loss": loss, "factor": factor}
