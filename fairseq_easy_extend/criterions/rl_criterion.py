@@ -57,16 +57,16 @@ class RLCriterion(FairseqCriterion):
         log_prob = F.log_softmax(outputs, dim=-1)
 
         # multinomial distribution
-        dist = torch.multinomial(log_prob.exp(), 1)
+        # dist = torch.multinomial(log_prob.exp(),1)
         # sampled_sentence = dist.sample()
-        sampled_sentence = dist
+        sampled_sentence = torch.multinomial(torch.exp(log_prob), 1).squeeze(-1)
         sampled_sentence_string = self.tgt_dict.string(sampled_sentence)
 
         target_sentence = self.tgt_dict.string(targets)
         with torch.no_grad():
             if self.metric == "bleu":
                 bleu = BLEU()
-                R = bleu.corpus_score(sampled_sentence_string, target_sentence).score
+                R = bleu.corpus_score(sampled_sentence_string, [target_sentence]).score
             elif self.metric == "chrf":
                 chrf = CHRF()
                 R = chrf.corpus_score(sampled_sentence_string, target_sentence).score
