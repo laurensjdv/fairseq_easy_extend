@@ -65,6 +65,8 @@ class RLCriterion(FairseqCriterion):
         target_sentence = self.tgt_dict.string(targets)
         with torch.no_grad():
             if self.metric == "bleu":
+                # TODO fix bleu calculation
+                # always results 0.0
                 bleu = BLEU()
                 R = bleu.corpus_score(sampled_sentence_string, [target_sentence]).score
             elif self.metric == "chrf":
