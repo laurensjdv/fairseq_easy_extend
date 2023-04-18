@@ -11,7 +11,7 @@ from torch import Tensor
 from dataclasses import dataclass, field
 
 from sacrebleu.metrics import BLEU, CHRF
-import comet
+from comet import download_model, load_from_checkpoint
 
 
 @dataclass
@@ -27,9 +27,19 @@ class RLCriterion(FairseqCriterion):
         super().__init__(task)
         self.metric = sentence_level_metric
         self.tgt_dict = task.tgt_dict
+        self.comet_model = load_from_checkpoint(
+            download_model("Unbabel/wmt22-comet-da")
+        )
 
     def _compute_loss(
-        self, outputs, targets, masks=None, label_smoothing=0.0, name="loss", factor=1.0
+        self,
+        src_tokens,
+        outputs,
+        targets,
+        masks=None,
+        label_smoothing=0.0,
+        name="loss",
+        factor=1.0,
     ):
         """
         outputs: batch x len x d_model
@@ -54,24 +64,30 @@ class RLCriterion(FairseqCriterion):
         # loss = -log_prob(outputs)*R()
         # loss = loss.mean()
 
-        log_prob = F.log_softmax(outputs, dim=-1)
+        prob = F.softmax(outputs, dim=-1)
+        log_prob = torch.log(prob)
 
         # multinomial distribution
         # dist = torch.multinomial(log_prob.exp(),1)
         # sampled_sentence = dist.sample()
-        sampled_sentence = torch.multinomial(torch.exp(log_prob), 1).squeeze(-1)
+        sampled_sentence = torch.multinomial(prob, 1).squeeze(-1)
         sampled_sentence_string = self.tgt_dict.string(sampled_sentence)
 
         target_sentence = self.tgt_dict.string(targets)
         with torch.no_grad():
             if self.metric == "bleu":
                 bleu = BLEU()
-                R = bleu.corpus_score([sampled_sentence_string], [[target_sentence]]).score
+                R = bleu.corpus_score(
+                    [sampled_sentence_string], [[target_sentence]]
+                ).score
             elif self.metric == "chrf":
                 chrf = CHRF()
-                R = chrf.corpus_score([sampled_sentence_string], [[target_sentence]]).score
-            # elif self.metric == "comet":
-            #     R = comet(sampled_sentence_string, [target_sentence])
+                R = chrf.corpus_score(
+                    [sampled_sentence_string], [[target_sentence]]
+                ).score
+            elif self.metric == "comet":
+                data = {"src": src_tokens, "mt": sampled_sentence, "ref": targets}
+                R = self.comet_model.predict(data)
 
         loss = -log_prob * R
         loss = loss.mean()
@@ -101,50 +117,22 @@ class RLCriterion(FairseqCriterion):
         tgt_tokens, prev_output_tokens = sample["target"], sample["prev_target"]
 
         outputs = model(src_tokens, src_lengths, prev_output_tokens, tgt_tokens)
-        losses, nll_loss = [], []
-
-        for obj in outputs:
-            if outputs[obj].get("loss", None) is None:
-                _losses = self._compute_loss(
-                    outputs[obj].get("out"),
-                    outputs[obj].get("tgt"),
-                    outputs[obj].get("mask", None),
-                    outputs[obj].get("ls", 0.0),
-                    name=obj + "-loss",
-                    factor=outputs[obj].get("factor", 1.0),
-                )
-            else:
-                _losses = self._custom_loss(
-                    outputs[obj].get("loss"),
-                    name=obj + "-loss",
-                    factor=outputs[obj].get("factor", 1.0),
-                )
-
-            losses += [_losses]
-            if outputs[obj].get("nll_loss", False):
-                nll_loss += [_losses.get("nll_loss", 0.0)]
-
-        loss = sum(l["loss"] for l in losses)
-        nll_loss = sum(l for l in nll_loss) if len(nll_loss) > 0 else loss.new_tensor(0)
+        # get loss only on tokens, not on lengths
+        outputs = outputs["word_ins"]
+        masks = (outputs.get("mask", None),)
+        loss = self._compute_loss(src_tokens, outputs, tgt_tokens, masks)
 
         # NOTE:
         # we don't need to use sample_size as denominator for the gradient
         # here sample_size is just used for logging
         sample_size = 1
         logging_output = {
-            "loss": loss.data,
-            "nll_loss": nll_loss.data,
+            "loss": loss.detach(),
+            "nll_loss": loss.detach(),
             "ntokens": ntokens,
             "nsentences": nsentences,
             "sample_size": sample_size,
         }
-
-        for l in losses:
-            logging_output[l["name"]] = (
-                utils.item(l["loss"].data / l["factor"])
-                if reduce
-                else l[["loss"]].data / l["factor"]
-            )
 
         return loss, sample_size, logging_output
 
