@@ -36,6 +36,7 @@ optimization:
   stop_min_lr: 1e-09
 checkpoint:
   no_epoch_checkpoints: true
+  keep-best-checkpoints: 1
 common:
   wandb_project: nlp2-project-C
   log_format: simple
