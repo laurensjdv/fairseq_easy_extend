@@ -70,8 +70,8 @@ class RLCriterion(FairseqCriterion):
         # multinomial distribution
         # dist = torch.multinomial(log_prob.exp(),1)
         # sampled_sentence = dist.sample()
-        sampled_sentence = torch.multinomial(prob, 1).squeeze(-1)
-        sampled_sentence_string = self.tgt_dict.string(sampled_sentence)
+        sampled_indices = torch.multinomial(prob, 1).squeeze(-1)
+        sampled_sentence_string = self.tgt_dict.string(sampled_indices)
 
         target_sentence = self.tgt_dict.string(targets)
         with torch.no_grad():
@@ -86,10 +86,10 @@ class RLCriterion(FairseqCriterion):
                     [sampled_sentence_string], [[target_sentence]]
                 ).score
             elif self.metric == "comet":
-                data = {"src": src_tokens, "mt": sampled_sentence, "ref": targets}
+                data = {"src": src_tokens, "mt": sampled_indices, "ref": targets}
                 R = self.comet_model.predict(data)
 
-        loss = -log_prob * R
+        loss = -log_prob.T[sampled_indices] * R
         loss = loss.mean()
 
         nll_loss = loss
@@ -118,9 +118,12 @@ class RLCriterion(FairseqCriterion):
 
         outputs = model(src_tokens, src_lengths, prev_output_tokens, tgt_tokens)
         # get loss only on tokens, not on lengths
-        outputs = outputs["word_ins"]
-        masks = outputs.get("mask", None)
-        loss = self._compute_loss(src_tokens, outputs, tgt_tokens, masks)
+        outs = outputs["word_ins"].get("out", None)
+        masks = outputs["word_ins"].get("mask", None)
+
+        loss_dict = self._compute_loss(outs, tgt_tokens, masks)
+        loss = loss_dict["loss"]
+        nll_loss = loss_dict["nll_loss"]
 
         # NOTE:
         # we don't need to use sample_size as denominator for the gradient
@@ -128,7 +131,7 @@ class RLCriterion(FairseqCriterion):
         sample_size = 1
         logging_output = {
             "loss": loss.detach(),
-            "nll_loss": loss.detach(),
+            "nll_loss": nll_loss.detach(),
             "ntokens": ntokens,
             "nsentences": nsentences,
             "sample_size": sample_size,
