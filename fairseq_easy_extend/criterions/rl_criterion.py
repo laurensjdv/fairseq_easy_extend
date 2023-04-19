@@ -121,7 +121,7 @@ class RLCriterion(FairseqCriterion):
         outs = outputs["word_ins"].get("out", None)
         masks = outputs["word_ins"].get("mask", None)
 
-        loss_dict = self._compute_loss(outs, tgt_tokens, masks)
+        loss_dict = self._compute_loss(src_tokens, outs, tgt_tokens, masks)
         loss = loss_dict["loss"]
         nll_loss = loss_dict["nll_loss"]
 
