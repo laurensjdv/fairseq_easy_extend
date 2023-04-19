@@ -27,9 +27,9 @@ class RLCriterion(FairseqCriterion):
         super().__init__(task)
         self.metric = sentence_level_metric
         self.tgt_dict = task.tgt_dict
-        self.comet_model = load_from_checkpoint(
-            download_model("Unbabel/wmt22-comet-da")
-        )
+        # self.comet_model = load_from_checkpoint(
+        #     download_model("Unbabel/wmt22-comet-da")
+        # )
 
     def _compute_loss(
         self,
@@ -119,7 +119,7 @@ class RLCriterion(FairseqCriterion):
         outputs = model(src_tokens, src_lengths, prev_output_tokens, tgt_tokens)
         # get loss only on tokens, not on lengths
         outputs = outputs["word_ins"]
-        masks = (outputs.get("mask", None),)
+        masks = outputs.get("mask", None)
         loss = self._compute_loss(src_tokens, outputs, tgt_tokens, masks)
 
         # NOTE:
