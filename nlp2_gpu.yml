@@ -19,3 +19,4 @@ dependencies:
     - wandb
     - setuptools==59.5.0
     - scikit-learn-extra
+    - unbabel-comet
