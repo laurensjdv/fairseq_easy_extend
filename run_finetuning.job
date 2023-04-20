@@ -1,10 +1,9 @@
 #!/bin/bash
 
 #SBATCH --job-name=Finetuning
-#SBATCH --partition=normal
-#SBATCH --constraint=silver_4110
-#SBATCH --time=01:00:00
-#SBATCH --mem=32000M
+#SBATCH --partition=fat
+#SBATCH --time=23:00:00
+#SBATCH --mem=80000M
 #SBATCH --output=job_logs/slurm_output_%A.out
 
 module purge
@@ -23,5 +22,5 @@ task.data=/home/lcur0927/fairseq_easy_extend/iwslt14.tokenized.de-en \
 checkpoint.restore_file=checkpoints/checkpoint_best.pt \
 checkpoint.reset_optimizer=True \
 checkpoint.save_dir=experiment_ckpts/dummy_test \
-optimization.max_update=5000 \
+criterion.sentence_level_metric=bleu \
 

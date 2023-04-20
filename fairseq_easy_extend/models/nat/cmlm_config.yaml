@@ -16,7 +16,7 @@ model:
     learned_pos: true
   encoder:
     learned_pos: true
-  dropout: 0.2
+  dropout: 0.3 # same as in CMLM training (from paper)
   label_smoothing: 0.1
   length_loss_factor: 0.01
 optimizer:
@@ -24,19 +24,19 @@ optimizer:
   adam_betas: (0.9,0.98)
 lr_scheduler:
   _name: inverse_sqrt
-  warmup_updates: 2000
-  warmup_init_lr: 1e-07
+  warmup_updates: 10
+  warmup_init_lr: 0.000005
 dataset:
   max_tokens: 8192
   validate_interval_updates: 1000
 optimization:
-  lr: [0.0005]
+  lr: [0.00005]
   update_freq: [8]
-  max_update: 20000
+  max_update: 100
   stop_min_lr: 1e-09
 checkpoint:
   no_epoch_checkpoints: true
 common:
   wandb_project: nlp2-project-C
   log_format: simple
-  log_interval: 5
+  log_interval: 50
