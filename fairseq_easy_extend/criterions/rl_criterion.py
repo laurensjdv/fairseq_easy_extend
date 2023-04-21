@@ -27,6 +27,8 @@ class RLCriterion(FairseqCriterion):
         super().__init__(task)
         self.metric = sentence_level_metric
         self.tgt_dict = task.tgt_dict
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         # self.comet_model = load_from_checkpoint(
         #     download_model("Unbabel/wmt22-comet-da")
         # )
@@ -46,53 +48,44 @@ class RLCriterion(FairseqCriterion):
         targets: batch x len
         masks:   batch x len
         """
+        bsz = outputs.size(0)
+        seq_len = outputs.size(1)
+        vocab_size = outputs.size(2)
 
-        # padding mask, do not remove
-        if masks is not None:
-            outputs, targets = outputs[masks], targets[masks]
-
-        # we take a softmax over outputs
-        # argmax over the softmax \ sampling (e.g. multinomial)
-        # sampled_sentence = [4, 17, 18, 19, 20]
-        # sampled_sentence_string = tgt_dict.string([4, 17, 18, 19, 20])
-        # see dictionary class of fairseq
-        # target_sentence = "I am a sentence"
-        # with torch.no_grad()
-        # R(*) = eval_metric(sampled_sentence_string, target_sentence)
-        # R(*) is a number, BLEU, сhrf, etc.
-
-        # loss = -log_prob(outputs)*R()
-        # loss = loss.mean()
-
-        prob = F.softmax(outputs, dim=-1)
-        log_prob = torch.log(prob)
-
-        # multinomial distribution
-        # dist = torch.multinomial(log_prob.exp(),1)
-        # sampled_sentence = dist.sample()
-        sampled_indices = torch.multinomial(prob, 1).squeeze(-1)
-        sampled_sentence_string = self.tgt_dict.string(sampled_indices)
-
-        target_sentence = self.tgt_dict.string(targets)
         with torch.no_grad():
-            if self.metric == "bleu":
+            probs = F.softmax(outputs, dim=-1).view(-1, vocab_size)
+            sample_idx = torch.multinomial(probs, 1, replacement=True).view(
+                bsz, seq_len
+            )
+            sampled_sentence_string = self.tgt_dict.string(sample_idx)
+            target_sentence_string = self.tgt_dict.string(sample_idx)
+
+        with torch.no_grad():
+            if self.metric == "constant":
+                R = 1
+            elif self.metric == "bleu":
                 bleu = BLEU()
                 R = bleu.corpus_score(
-                    [sampled_sentence_string], [[target_sentence]]
+                    [sampled_sentence_string], [[target_sentence_string]]
                 ).score
             elif self.metric == "chrf":
                 chrf = CHRF()
                 R = chrf.corpus_score(
-                    [sampled_sentence_string], [[target_sentence]]
+                    [sampled_sentence_string], [[target_sentence_string]]
                 ).score
-            elif self.metric == "comet":
-                data = {"src": src_tokens, "mt": sampled_indices, "ref": targets}
-                R = self.comet_model.predict(data)
+            reward = torch.tensor([[R] * bsz] * seq_len).to(self.device).T
 
-        loss = -log_prob.T[sampled_indices] * R
+        # padding mask, do not remove
+        if masks is not None:
+            outputs, targets = outputs[masks], targets[masks]
+            reward, sample_idx = reward[masks], sample_idx[masks]
+
+        log_probs = F.log_softmax(outputs, dim=-1)
+        log_probs_of_samples = torch.gather(log_probs, 1, sample_idx.unsqueeze(1))
+        loss = -log_probs_of_samples * reward
         loss = loss.mean()
-
         nll_loss = loss
+
         loss = loss * factor
 
         return {"name": name, "loss": loss, "nll_loss": nll_loss, "factor": factor}
