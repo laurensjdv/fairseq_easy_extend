@@ -19,15 +19,19 @@ class RLCriterionConfig(FairseqDataclass):
     sentence_level_metric: str = field(
         default="bleu", metadata={"help": "sentence level metric"}
     )
+    temperature: float = field(
+        default=1.0, metadata={"help": "temperature for sampling"}
+    )
 
 
 @register_criterion("rl_loss", dataclass=RLCriterionConfig)
 class RLCriterion(FairseqCriterion):
-    def __init__(self, task, sentence_level_metric):
+    def __init__(self, task, sentence_level_metric, temperature):
         super().__init__(task)
         self.metric = sentence_level_metric
         self.tgt_dict = task.tgt_dict
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.temperature = temperature
 
         # self.comet_model = load_from_checkpoint(
         #     download_model("Unbabel/wmt22-comet-da")
@@ -53,7 +57,7 @@ class RLCriterion(FairseqCriterion):
         vocab_size = outputs.size(2)
 
         with torch.no_grad():
-            probs = F.softmax(outputs, dim=-1).view(-1, vocab_size)
+            probs = F.softmax(outputs, dim=-1).view(-1, vocab_size) / self.temperature
             sample_idx = torch.multinomial(probs, 1, replacement=True).view(
                 bsz, seq_len
             )
@@ -73,7 +77,7 @@ class RLCriterion(FairseqCriterion):
                 R = chrf.corpus_score(
                     [sampled_sentence_string], [[target_sentence_string]]
                 ).score
-            reward = torch.tensor([[R] * bsz] * seq_len).to(self.device).T
+            reward = torch.tensor([[R] * seq_len] * bsz).to(self.device)
 
         # padding mask, do not remove
         if masks is not None:
