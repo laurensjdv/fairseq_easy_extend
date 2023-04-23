@@ -8,6 +8,7 @@ task:
 criterion:
   _name: rl_loss
   sentence_level_metric: bleu
+  temperature: 1.0
 model:
   _name: cmlm_transformer_base
   share_decoder_input_output_embed: true
