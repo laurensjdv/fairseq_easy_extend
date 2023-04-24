@@ -61,11 +61,23 @@ class RLCriterion(FairseqCriterion):
             sample_idx = torch.multinomial(probs, 1, replacement=True).view(
                 bsz, seq_len
             )
+            # sampled_sentence_string = [
+            #     self.tgt_dict.string(sample) for sample in sample_idx
+            # ]
+            # target_sentence_string = [
+            #     self.tgt_dict.string(targets) for sample in targets
+            # ]
             sampled_sentence_string = [
-                self.tgt_dict.string(sample) for sample in sample_idx
+                self.detokenizer.detokenize(
+                    self.tgt_dict.string(sample), return_str=True
+                )
+                for sample in sample_idx
             ]
             target_sentence_string = [
-                self.tgt_dict.string(targets) for sample in targets
+                self.detokenizer.detokenize(
+                    self.tgt_dict.string(sample), return_str=True
+                )
+                for sample in targets
             ]
 
         print()
