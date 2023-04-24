@@ -61,23 +61,46 @@ class RLCriterion(FairseqCriterion):
             sample_idx = torch.multinomial(probs, 1, replacement=True).view(
                 bsz, seq_len
             )
-            sampled_sentence_string = self.tgt_dict.string(sample_idx)
-            target_sentence_string = self.tgt_dict.string(sample_idx)
+            sampled_sentence_string = [
+                self.tgt_dict.string(sample) for sample in sample_idx
+            ]
+            target_sentence_string = [
+                self.tgt_dict.string(targets) for sample in targets
+            ]
+
+        print()
 
         with torch.no_grad():
             if self.metric == "constant":
                 R = 1
             elif self.metric == "bleu":
-                bleu = BLEU()
-                R = bleu.corpus_score(
-                    [sampled_sentence_string], [[target_sentence_string]]
-                ).score
+                bleu = BLEU(effective_order=True)
+                # R = bleu.sentence_score(
+                #     [sampled_sentence_string], [[target_sentence_string]]
+                # ).score
+                R = torch.tensor(
+                    [
+                        [bleu.sentence_score(sample, target).score] * seq_len
+                        for sample, target in zip(
+                            sampled_sentence_string, target_sentence_string
+                        )
+                    ]
+                )
+
             elif self.metric == "chrf":
                 chrf = CHRF()
-                R = chrf.corpus_score(
-                    [sampled_sentence_string], [[target_sentence_string]]
-                ).score
-            reward = torch.tensor([[R] * seq_len] * bsz).to(self.device)
+                # R = chrf.corpus_score(
+                #     [sampled_sentence_string], [[target_sentence_string]]
+                # ).score
+                R = torch.tensor(
+                    [
+                        [chrf.sentence_score(sample, target).score] * seq_len
+                        for sample, target in zip(
+                            sampled_sentence_string, target_sentence_string
+                        )
+                    ]
+                )
+            # reward = torch.tensor([[R] * seq_len] * bsz).to(self.device)
 
         # padding mask, do not remove
         if masks is not None:
