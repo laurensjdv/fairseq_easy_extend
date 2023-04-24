@@ -69,13 +69,13 @@ class RLCriterion(FairseqCriterion):
             # ]
             sampled_sentence_string = [
                 self.detokenizer.detokenize(
-                    self.tgt_dict.string(sample), return_str=True
+                    self.tgt_dict.string(sample).split(), return_str=True
                 )
                 for sample in sample_idx
             ]
             target_sentence_string = [
                 self.detokenizer.detokenize(
-                    self.tgt_dict.string(sample), return_str=True
+                    self.tgt_dict.string(sample).split(), return_str=True
                 )
                 for sample in targets
             ]
