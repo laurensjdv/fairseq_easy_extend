@@ -80,7 +80,7 @@ class RLCriterion(FairseqCriterion):
                 # ).score
                 R = torch.tensor(
                     [
-                        [bleu.sentence_score(sample, target).score] * seq_len
+                        [bleu.sentence_score(sample, [target]).score] * seq_len
                         for sample, target in zip(
                             sampled_sentence_string, target_sentence_string
                         )
@@ -94,7 +94,7 @@ class RLCriterion(FairseqCriterion):
                 # ).score
                 R = torch.tensor(
                     [
-                        [chrf.sentence_score(sample, target).score] * seq_len
+                        [chrf.sentence_score(sample, [target]).score] * seq_len
                         for sample, target in zip(
                             sampled_sentence_string, target_sentence_string
                         )
