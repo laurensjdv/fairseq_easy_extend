@@ -82,8 +82,6 @@ class RLCriterion(FairseqCriterion):
                 for sample in targets
             ]
 
-        print()
-
         with torch.no_grad():
             if self.metric == "constant":
                 R = 1
