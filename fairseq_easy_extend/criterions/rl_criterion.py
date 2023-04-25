@@ -115,6 +115,7 @@ class RLCriterion(FairseqCriterion):
                     ]
                 )
             # reward = torch.tensor([[R] * seq_len] * bsz).to(self.device)
+            reward = R.to(self.device)
 
         # padding mask, do not remove
         if masks is not None:
