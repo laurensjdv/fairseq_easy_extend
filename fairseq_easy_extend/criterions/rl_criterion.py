@@ -7,6 +7,7 @@ from fairseq.logging import metrics
 from fairseq.criterions import FairseqCriterion, register_criterion
 from fairseq.dataclass import FairseqDataclass
 from torch import Tensor
+from bert_score import BERTScorer
 
 
 from dataclasses import dataclass, field
@@ -35,6 +36,9 @@ class RLCriterion(FairseqCriterion):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.temperature = temperature
         self.detokenizer = sacremoses.MosesDetokenizer(lang="en")
+        self.bleu = BLEU(effective_order=True)
+        self.chrf = CHRF()
+        self.bertscorer = BERTScorer(lang="en", rescale_with_baseline=True)
         # self.comet_model = load_from_checkpoint(
         #     download_model("Unbabel/wmt22-comet-da")
         # )
@@ -82,17 +86,19 @@ class RLCriterion(FairseqCriterion):
                 for sample in targets
             ]
 
+        # print(len(sampled_sentence_string))
+        # print(len(target_sentence_string))
         with torch.no_grad():
             if self.metric == "constant":
                 R = 1
             elif self.metric == "bleu":
-                bleu = BLEU(effective_order=True)
+                
                 # R = bleu.sentence_score(
                 #     [sampled_sentence_string], [[target_sentence_string]]
                 # ).score
                 R = torch.tensor(
                     [
-                        [bleu.sentence_score(sample, [target]).score] * seq_len
+                        [self.bleu.sentence_score(sample, [target]).score] * seq_len
                         for sample, target in zip(
                             sampled_sentence_string, target_sentence_string
                         )
@@ -100,20 +106,25 @@ class RLCriterion(FairseqCriterion):
                 )
 
             elif self.metric == "chrf":
-                chrf = CHRF()
                 # R = chrf.corpus_score(
                 #     [sampled_sentence_string], [[target_sentence_string]]
                 # ).score
                 R = torch.tensor(
                     [
-                        [chrf.sentence_score(sample, [target]).score] * seq_len
+                        [self.chrf.sentence_score(sample, [target]).score] * seq_len
                         for sample, target in zip(
                             sampled_sentence_string, target_sentence_string
                         )
                     ]
                 )
+            elif self.metric == 'bert':
+                _, _, F1 = self.bertscorer.score(sampled_sentence_string, target_sentence_string)
+                # print(F1.size())
+                R = torch.tensor([[F1s] * seq_len for F1s in F1])
             # reward = torch.tensor([[R] * seq_len] * bsz).to(self.device)
             reward = R.to(self.device)
+
+        # print(reward.size())
 
         # padding mask, do not remove
         if masks is not None:
