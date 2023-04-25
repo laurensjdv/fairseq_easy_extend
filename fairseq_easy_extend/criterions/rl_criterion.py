@@ -34,7 +34,7 @@ class RLCriterion(FairseqCriterion):
         self.tgt_dict = task.tgt_dict
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.temperature = temperature
-        self.tokenizer = sacremoses.MosesDetokenizer(lang="en")
+        self.detokenizer = sacremoses.MosesDetokenizer(lang="en")
         # self.comet_model = load_from_checkpoint(
         #     download_model("Unbabel/wmt22-comet-da")
         # )
