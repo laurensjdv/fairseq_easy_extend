@@ -7,7 +7,7 @@ from fairseq.logging import metrics
 from fairseq.criterions import FairseqCriterion, register_criterion
 from fairseq.dataclass import FairseqDataclass
 from torch import Tensor
-from bert_score import BERTScorer
+# from bert_score import BERTScorer
 
 
 from dataclasses import dataclass, field
@@ -38,7 +38,7 @@ class RLCriterion(FairseqCriterion):
         self.detokenizer = sacremoses.MosesDetokenizer(lang="en")
         self.bleu = BLEU(effective_order=True)
         self.chrf = CHRF()
-        self.bertscorer = BERTScorer(lang="en", rescale_with_baseline=True)
+        # self.bertscorer = BERTScorer(lang="en", rescale_with_baseline=True)
         # self.comet_model = load_from_checkpoint(
         #     download_model("Unbabel/wmt22-comet-da")
         # )
@@ -117,10 +117,10 @@ class RLCriterion(FairseqCriterion):
                         )
                     ]
                 )
-            elif self.metric == 'bert':
-                _, _, F1 = self.bertscorer.score(sampled_sentence_string, target_sentence_string)
-                # print(F1.size())
-                R = torch.tensor([[F1s] * seq_len for F1s in F1])
+            # elif self.metric == 'bert':
+            #     _, _, F1 = self.bertscorer.score(sampled_sentence_string, target_sentence_string)
+            #     # print(F1.size())
+            #     R = torch.tensor([[F1s] * seq_len for F1s in F1])
             # reward = torch.tensor([[R] * seq_len] * bsz).to(self.device)
             reward = R.to(self.device)
 
