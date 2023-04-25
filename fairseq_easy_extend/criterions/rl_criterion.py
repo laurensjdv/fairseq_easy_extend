@@ -8,10 +8,12 @@ from fairseq.criterions import FairseqCriterion, register_criterion
 from fairseq.dataclass import FairseqDataclass
 from torch import Tensor
 
+
 from dataclasses import dataclass, field
 
 from sacrebleu.metrics import BLEU, CHRF
 from comet import download_model, load_from_checkpoint
+import sacremoses
 
 
 @dataclass
@@ -32,7 +34,7 @@ class RLCriterion(FairseqCriterion):
         self.tgt_dict = task.tgt_dict
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.temperature = temperature
-
+        self.tokenizer = sacremoses.MosesDetokenizer(lang="en")
         # self.comet_model = load_from_checkpoint(
         #     download_model("Unbabel/wmt22-comet-da")
         # )
