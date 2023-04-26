@@ -1,8 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=InstallEnvironment
-#SBATCH --partition=normal
-#SBATCH --constraint=silver_4110
+#SBATCH --partition=fat
 #SBATCH --time=01:00:00
 #SBATCH --mem=32000M
 #SBATCH --output=job_logs/slurm_output_%A.out

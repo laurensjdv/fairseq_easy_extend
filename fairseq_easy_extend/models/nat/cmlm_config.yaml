@@ -24,19 +24,19 @@ optimizer:
   adam_betas: (0.9,0.98)
 lr_scheduler:
   _name: inverse_sqrt
-  warmup_updates: 10
-  warmup_init_lr: 0.000005
+  warmup_updates: 1
+  warmup_init_lr: 0.0005
 dataset:
   max_tokens: 8192
-  validate_interval_updates: 1000
+  validate_interval_updates: 20
 optimization:
-  lr: [0.00005]
+  lr: [0.0005]
   update_freq: [8]
-  max_update: 100
+  max_update: 200
   stop_min_lr: 1e-09
 checkpoint:
   no_epoch_checkpoints: true
 common:
   wandb_project: nlp2-project-C
   log_format: simple
-  log_interval: 50
+  log_interval: 5

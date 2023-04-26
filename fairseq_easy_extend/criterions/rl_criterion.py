@@ -75,13 +75,13 @@ class RLCriterion(FairseqCriterion):
             # ]
             sampled_sentence_string = [
                 self.detokenizer.detokenize(
-                    self.tgt_dict.string(sample).split(), return_str=True
+                    self.tgt_dict.string(sample, bpe_symbol="@@"), return_str=True
                 )
                 for sample in sample_idx
             ]
             target_sentence_string = [
                 self.detokenizer.detokenize(
-                    self.tgt_dict.string(sample).split(), return_str=True
+                    self.tgt_dict.string(sample, bpe_symbol="@@"), return_str=True
                 )
                 for sample in targets
             ]
@@ -90,7 +90,7 @@ class RLCriterion(FairseqCriterion):
         # print(len(target_sentence_string))
         with torch.no_grad():
             if self.metric == "constant":
-                R = 1
+                R = torch.ones(bsz, seq_len)
             elif self.metric == "bleu":
                 
                 # R = bleu.sentence_score(

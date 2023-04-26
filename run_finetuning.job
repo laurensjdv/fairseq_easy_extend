@@ -21,6 +21,6 @@ python train.py --config-dir "fairseq_easy_extend/models/nat/" \
 task.data=/home/lcur0927/fairseq_easy_extend/iwslt14.tokenized.de-en \
 checkpoint.restore_file=checkpoints/checkpoint_best.pt \
 checkpoint.reset_optimizer=True \
-checkpoint.save_dir=experiment_ckpts/dummy_test \
+checkpoint.save_dir=experiment_ckpts/rl_bleu_temp1 \
 criterion.sentence_level_metric=bleu \
 
