@@ -13,7 +13,7 @@ from torch import Tensor
 from dataclasses import dataclass, field
 
 from sacrebleu.metrics import BLEU, CHRF
-from comet import download_model, load_from_checkpoint
+# from comet import download_model, load_from_checkpoint
 import sacremoses
 
 
@@ -62,29 +62,29 @@ class RLCriterion(FairseqCriterion):
         seq_len = outputs.size(1)
         vocab_size = outputs.size(2)
 
+        # padding mask, do not remove
+        if masks is not None:
+            outputs, targets = outputs[masks], targets[masks]
+            #reward, sample_idx = reward[masks], sample_idx[masks]
+
+        
+
         with torch.no_grad():
-            probs = F.softmax(outputs, dim=-1).view(-1, vocab_size) / self.temperature
-            sample_idx = torch.multinomial(probs, 1, replacement=True).view(
-                bsz, seq_len
-            )
+            probs = F.softmax(outputs, dim=-1) #.view(-1, vocab_size) / self.temperature
+            sample_idx = torch.multinomial(probs, 1, replacement=True)
             # sampled_sentence_string = [
             #     self.tgt_dict.string(sample) for sample in sample_idx
             # ]
             # target_sentence_string = [
             #     self.tgt_dict.string(targets) for sample in targets
             # ]
-            sampled_sentence_string = [
-                self.detokenizer.detokenize(
-                    self.tgt_dict.string(sample).split(), return_str=True
+            sampled_sentence_string = self.detokenizer.detokenize(
+                    self.tgt_dict.string(sample_idx).split(), return_str=True
                 )
-                for sample in sample_idx
-            ]
-            target_sentence_string = [
-                self.detokenizer.detokenize(
-                    self.tgt_dict.string(sample).split(), return_str=True
+            
+            target_sentence_string = self.detokenizer.detokenize(
+                    self.tgt_dict.string(targets).split(), return_str=True
                 )
-                for sample in targets
-            ]
 
         # print(len(sampled_sentence_string))
         # print(len(target_sentence_string))
@@ -93,46 +93,28 @@ class RLCriterion(FairseqCriterion):
                 R = 1
             elif self.metric == "bleu":
                 
-                # R = bleu.sentence_score(
-                #     [sampled_sentence_string], [[target_sentence_string]]
-                # ).score
-                R = torch.tensor(
-                    [
-                        [self.bleu.sentence_score(sample, [target]).score] * seq_len
-                        for sample, target in zip(
-                            sampled_sentence_string, target_sentence_string
-                        )
-                    ]
-                )
+                R = self.bleu.sentence_score(
+                    sampled_sentence_string, [target_sentence_string]
+                ).score
 
             elif self.metric == "chrf":
-                # R = chrf.corpus_score(
-                #     [sampled_sentence_string], [[target_sentence_string]]
-                # ).score
-                R = torch.tensor(
-                    [
-                        [self.chrf.sentence_score(sample, [target]).score] * seq_len
-                        for sample, target in zip(
-                            sampled_sentence_string, target_sentence_string
-                        )
-                    ]
-                )
+                R = self.chrf.corpus_score(
+                    sampled_sentence_string, [target_sentence_string]
+                ).score
             # elif self.metric == 'bert':
             #     _, _, F1 = self.bertscorer.score(sampled_sentence_string, target_sentence_string)
             #     # print(F1.size())
             #     R = torch.tensor([[F1s] * seq_len for F1s in F1])
             # reward = torch.tensor([[R] * seq_len] * bsz).to(self.device)
+            R = torch.tensor(R)
             reward = R.to(self.device)
 
         # print(reward.size())
 
-        # padding mask, do not remove
-        if masks is not None:
-            outputs, targets = outputs[masks], targets[masks]
-            reward, sample_idx = reward[masks], sample_idx[masks]
+        
 
         log_probs = F.log_softmax(outputs, dim=-1)
-        log_probs_of_samples = torch.gather(log_probs, 1, sample_idx.unsqueeze(1))
+        log_probs_of_samples = torch.gather(log_probs, 1, targets.unsqueeze(1))
         loss = -log_probs_of_samples * reward
         loss = loss.mean()
         nll_loss = loss
