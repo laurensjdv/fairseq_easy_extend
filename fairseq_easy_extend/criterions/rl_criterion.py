@@ -43,6 +43,41 @@ class RLCriterion(FairseqCriterion):
         #     download_model("Unbabel/wmt22-comet-da")
         # )
 
+    def _shape(welf, targets, target_lens):
+        list_targets = []
+        begin = 0
+        end = 0
+        for length in target_lens:
+            end += length
+            list_targets.append([str(index) for index in targets[begin:end]])
+            begin += length
+        return list_targets
+
+    def _sentence_reward(self, sample_index, sample_prob, targets, target_lens):
+
+        list_targets = self._shape(targets,target_lens)
+        list_samples = self._shape(sample_index,target_lens)
+        count = len(list_samples)
+        rewards = []
+        for i in range(count):
+            # sample_i = self.tgt_dict.string(list_samples[i], bpe_symbol="@@")
+            sample_i = self.detokenizer.detokenize(
+                    self.tgt_dict.string(list_samples[i], bpe_symbol="@@"), return_str=True)
+            # target_i = self.tgt_dict.string(list_targets[i], bpe_symbol="@@")
+            target_i = self.detokenizer.detokenize(
+                self.tgt_dict.string(list_targets[i], bpe_symbol="@@"), return_str=True)
+            if self.metric == 'constant':
+                reward = 1
+            elif self.metric == 'bleu':
+                reward = self.bleu.sentence_score([sample_i], [[target_i]]).score
+            elif self.metric == 'chrf':
+                reward = self.chrf.sentence_score(sample_i, [target_i]).score
+            # reward = utils.my_sentence_rouge([sample_i], target_i)
+            for k in range(len(list_samples[i])):
+                rewards.append(reward)
+        rewards = torch.Tensor(rewards).cuda(sample_prob.get_device())
+        return rewards
+
     def _compute_loss(
         self,
         src_tokens,
@@ -61,6 +96,29 @@ class RLCriterion(FairseqCriterion):
         bsz = outputs.size(0)
         seq_len = outputs.size(1)
         vocab_size = outputs.size(2)
+
+        if masks is not None:
+            outputs, targets = outputs[masks], targets[masks]
+        probs = F.softmax(outputs)
+        target_lens = torch.sum(masks, dim=-1).long().tolist()
+        targets = targets.data.tolist() # ?
+
+        sample_index = torch.multinomial(probs, 1)
+        sample_prob = torch.gather(probs, -1, sample_index)
+        sample_index = sample_index.data.view(-1).tolist()
+        reward = self._sentence_reward(sample_index, probs, targets, target_lens)
+        loss_sample = torch.sum((-1 * torch.log(sample_prob).view(-1) * reward), dim=0)
+        loss = loss_sample.div(len(targets))
+
+        nll_loss = loss
+
+        loss = loss * factor
+
+        return {"name": name, "loss": loss, "nll_loss": nll_loss, "factor": factor}
+
+
+
+        '''
 
         with torch.no_grad():
             probs = F.softmax(outputs, dim=-1).view(-1, vocab_size) / self.temperature
@@ -140,6 +198,7 @@ class RLCriterion(FairseqCriterion):
         loss = loss * factor
 
         return {"name": name, "loss": loss, "nll_loss": nll_loss, "factor": factor}
+        '''
 
     def _custom_loss(self, loss, name="loss", factor=1.0):
         return {"name": name, "loss": loss, "factor": factor}
