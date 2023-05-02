@@ -7,7 +7,7 @@ task:
   noise: random_mask
 criterion:
   _name: rl_loss
-  sentence_level_metric: chrf
+  sentence_level_metric: bert
   temperature: 1.0
 model:
   _name: cmlm_transformer_base
@@ -36,9 +36,9 @@ optimization:
   stop_min_lr: 1e-09
 checkpoint:
   no_epoch_checkpoints: true
-  restore_file: /content/drive/MyDrive/NLP2/model_chrf/checkpoint_pretrained.pt
+  restore_file: /content/drive/MyDrive/NLP2/model_bert/checkpoint_pretrained.pt
   reset_optimizer: true
-  save_dir: /content/drive/MyDrive/NLP2/model_chrf
+  save_dir: /content/drive/MyDrive/NLP2/model_bert
 common:
   wandb_project: nlp2-project-C
   log_format: simple
