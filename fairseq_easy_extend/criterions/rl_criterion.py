@@ -13,6 +13,7 @@ from bert_score import BERTScorer
 from dataclasses import dataclass, field
 
 from sacrebleu.metrics import BLEU, CHRF
+
 # from comet import download_model, load_from_checkpoint
 import sacremoses
 
@@ -65,12 +66,12 @@ class RLCriterion(FairseqCriterion):
         # padding mask, do not remove
         if masks is not None:
             outputs, targets = outputs[masks], targets[masks]
-            #reward, sample_idx = reward[masks], sample_idx[masks]
-
-        
+            # reward, sample_idx = reward[masks], sample_idx[masks]
 
         with torch.no_grad():
-            probs = F.softmax(outputs, dim=-1) #.view(-1, vocab_size) / self.temperature
+            probs = F.softmax(
+                outputs, dim=-1
+            )  # .view(-1, vocab_size) / self.temperature
             sample_idx = torch.multinomial(probs, 1, replacement=True)
             # sampled_sentence_string = [
             #     self.tgt_dict.string(sample) for sample in sample_idx
@@ -79,12 +80,12 @@ class RLCriterion(FairseqCriterion):
             #     self.tgt_dict.string(targets) for sample in targets
             # ]
             sampled_sentence_string = self.detokenizer.detokenize(
-                    self.tgt_dict.string(sample_idx).split(), return_str=True
-                )
-            
+                self.tgt_dict.string(sample_idx).split(), return_str=True
+            )
+
             target_sentence_string = self.detokenizer.detokenize(
-                    self.tgt_dict.string(targets).split(), return_str=True
-                )
+                self.tgt_dict.string(targets).split(), return_str=True
+            )
 
         # print(len(sampled_sentence_string))
         # print(len(target_sentence_string))
@@ -92,7 +93,7 @@ class RLCriterion(FairseqCriterion):
             if self.metric == "constant":
                 R = 1
             elif self.metric == "bleu":
-                
+
                 R = self.bleu.sentence_score(
                     sampled_sentence_string, [target_sentence_string]
                 ).score
@@ -101,8 +102,10 @@ class RLCriterion(FairseqCriterion):
                 R = self.chrf.corpus_score(
                     sampled_sentence_string, [target_sentence_string]
                 ).score
-            elif self.metric == 'bert':
-                _, _, F1 = self.bertscorer.score(sampled_sentence_string, target_sentence_string)
+            elif self.metric == "bert":
+                _, _, F1 = self.bertscorer.score(
+                    [sampled_sentence_string], [target_sentence_string]
+                )
                 R = F1
             #     R = torch.tensor([[F1s] * seq_len for F1s in F1])
             # reward = torch.tensor([[R] * seq_len] * bsz).to(self.device)
@@ -110,8 +113,6 @@ class RLCriterion(FairseqCriterion):
             reward = R.to(self.device)
 
         # print(reward.size())
-
-        
 
         log_probs = F.log_softmax(outputs, dim=-1)
         log_probs_of_samples = torch.gather(log_probs, 1, targets.unsqueeze(1))
